@@ -257,6 +257,9 @@ button{font-family:inherit}
 .endcard .crown{font-weight:800; letter-spacing:2.2px; text-transform:uppercase; font-size:12px; color:var(--gold); margin-top:10px}
 .unitcard{margin-bottom:14px}
 .unitcard .chips .chip{min-width:78px}
+.unitcard .chips .chip.rv1{border-color:rgba(245,207,107,.55); color:var(--gold)}
+.unitcard .chips .chip.rv2{border-color:var(--gold); color:var(--gold); font-weight:900}
+.unitcard .chips .chip[aria-pressed="true"]{color:var(--navy)}
 .psg{display:block; background:var(--stage-2); border-left:4px solid var(--gold); border-radius:10px; padding:12px 14px; margin:0 0 12px; font-size:.82em; line-height:1.55; color:var(--cream); font-weight:600}
 .listen{display:flex; flex-wrap:wrap; gap:8px; align-items:center; margin-top:12px; font-size:16px}
 .lbtn{background:var(--gold); color:var(--navy); border:none; border-radius:10px; padding:10px 16px; font-weight:800; font-size:16px; cursor:pointer; font-family:var(--f-body)}
@@ -727,16 +730,111 @@ const UNITS = [
 ];
 /* ══════════════ HẾT NGÂN HÀNG CÂU HỎI ══════════════ */
 
-/* unit đang chọn: 0 = tất cả, 1–10 = từng unit */
-let curUnit = 1;
-const unitLabel = u => u ? 'Unit ' + u + ' · ' + UNITS[u-1].t : 'Ôn tập Unit 1–10';
-function poolFor(u){
-  const src = u ? [UNITS[u-1]] : UNITS;
-  const out = [];
-  src.forEach(x => x.items.forEach(q => out.push({...q, unit:x.n})));
+/* ══════════════════════════════════════════════════════════════════
+   GAME ÔN TẬP — theo nhịp sách:
+   Unit 1 → Unit 2 → 🔁 Ôn 1–2 → Unit 3 → Unit 4 → 🔁 Ôn 3–4 → Unit 5 → ⭐ Ôn tập 1 (Unit 1–5)
+   Unit 6 → Unit 7 → 🔁 Ôn 6–7 → Unit 8 → Unit 9 → 🔁 Ôn 8–9 → Unit 10 → ⭐ Ôn tập 2 (Unit 6–10)
+   Game ôn = toàn bộ câu của các unit đó + câu TỔNG HỢP viết riêng (trộn kiến thức nhiều unit).
+   Đọc hiểu: đoạn văn luôn nằm ngay trong câu hỏi — học sinh đọc rồi trả lời,
+   không bao giờ hỏi nội dung bài đọc trong sách.
+   ══════════════════════════════════════════════════════════════════ */
+const MIX = {
+r12: (()=>{ const r=qR("Hi! My name is Akiko. I'm from Japan. I'm Japanese. I get up at six thirty. I have breakfast at seven o'clock. I go to school at seven fifteen."); return [
+  r("Where is Akiko from?","Japan.","Thailand.","Malaysia."),
+  r("What time does Akiko get up?","At six thirty.","At seven o'clock.","At seven fifteen."),
+  r("What does Akiko do at seven fifteen?","She goes to school.","She has breakfast.","She gets up."),
+  qS("A: Where are you from?<br>B: I'm from Australia. I get up ___ six o'clock.","at","in","on"),
+  qC("Bạn mới đến từ Mỹ. Em muốn biết bạn ấy đi học lúc mấy giờ. Em hỏi:","What time do you go to school?","Where are you from?","What nationality are you?"),
+  qL("I'm Tom. I'm American. I go to bed at nine o'clock.","Tom đi ngủ lúc mấy giờ?","9:00","9:30","8:00"),
+  qO("I'm Vietnamese","and","I get up","at six o'clock.")
+];})(),
+r34: (()=>{ const r=qR("My name is Nam. My birthday is in July. This year it is on a Saturday. On Saturdays, I usually help my parents, but on my birthday I have a party. We have chips, grapes and lemonade."); return [
+  r("When is Nam's birthday?","In July.","In June.","In January."),
+  r("What does Nam usually do on Saturdays?","He helps his parents.","He plays the piano.","He goes to school."),
+  r("What do they drink at the party?","Lemonade.","Milk.","Orange juice."),
+  qS("My birthday is ___ May. I have a party ___ Sunday.","in / on","on / in","in / in"),
+  qC("Sinh nhật bạn vào Chủ nhật. Em muốn hỏi sinh nhật bạn vào tháng nào. Em hỏi:","When's your birthday?","What day is it today?","Would you like some chips?"),
+  qL("My birthday is in October. On my birthday I listen to music and eat cake.","Sinh nhật bạn ấy vào tháng mấy?","October","August","November"),
+  qO("My birthday","is","in","December.")
+];})(),
+r15: (()=>{ const r1=qR("Hello! I'm Hakim. I'm from Malaysia. I'm Malaysian. I can swim and I can play the guitar. I get up at six o'clock. On Sundays, I play volleyball with my friends.");
+              const r2=qR("Linda is British. Her birthday is in August. She can dance but she can't sing. She goes to school at seven fifteen. On Mondays, she studies at home after school."); return [
+  r1("What nationality is Hakim?","Malaysian.","Japanese.","Thai."),
+  r1("What can Hakim do?","Swim and play the guitar.","Swim and dance.","Cook and play the piano."),
+  r1("What does Hakim do on Sundays?","He plays volleyball.","He goes to school.","He plays the guitar."),
+  r2("When is Linda's birthday?","In August.","In April.","In October."),
+  r2("What can't Linda do?","She can't sing.","She can't dance.","She can't swim."),
+  r2("What time does Linda go to school?","At seven fifteen.","At seven o'clock.","At six o'clock."),
+  qS("Chọn câu đúng:","She's from Thailand and she can cook.","She from Thailand and she can cooks.","She's Thailand and she can cook."),
+  qS("I go to school ___ seven o'clock ___ Mondays.","at / on","on / at","in / on"),
+  qC("Em muốn biết bạn có biết đi xe đạp không. Em hỏi:","Can you ride a bike?","What can you ride?","Do you ride a bike now?"),
+  qC("Bạn hỏi: <i>“When's your birthday?”</i> Em trả lời:","It's in March.","It's at seven o'clock.","It's Monday."),
+  qL("I'm Mai. I'm Vietnamese. I can play the piano. My birthday is in June.","Mai có thể làm gì?","play the piano","play the guitar","ride a horse"),
+  qL("On Fridays, I water the flowers at five o'clock.","Bạn ấy tưới hoa lúc mấy giờ?","5:00","4:00","6:00"),
+  qO("Can","you","play","the piano?"),
+  qO("What","do you","do","on Sundays?")
+];})(),
+r67: (()=>{ const r=qR("My school is in the town. It's big and new. There is a library and a computer room. Today is Monday. I have five lessons: Maths, Vietnamese, English, IT and Music. I have IT in the computer room."); return [
+  r("Where is the school?","In the town.","In the village.","In the city."),
+  r("How many lessons does the writer have today?","Five.","Four.","Three."),
+  r("Where does the writer have IT?","In the computer room.","In the library.","In the gym."),
+  qS("A: Is there a gym in your school?<br>B: Yes, ___. We have PE there on Fridays.","there is","it is","there are"),
+  qC("Bạn mới chuyển trường. Em muốn biết bạn học Tiếng Anh vào thứ mấy. Em hỏi:","When do you have English?","Is there an English room?","Where's your school?"),
+  qL("There is a music room. I have Music there on Tuesdays.","Bạn ấy học Âm nhạc vào thứ mấy?","Tuesday","Thursday","Monday"),
+  qO("I have Art","in","the art room.")
+];})(),
+r89: (()=>{ const r=qR("Hi, I'm Lan. My favourite subject is PE because I want to be a footballer. Our sports day is in March. Look! I'm playing football and my friends are running."); return [
+  r("What is Lan's favourite subject?","PE.","Music.","Art."),
+  r("Why does Lan like PE?","She wants to be a footballer.","She wants to be a singer.","She wants to be a teacher."),
+  r("What are Lan's friends doing?","They're running.","They're playing football.","They're swimming."),
+  qS("He likes PE. Look! He ___ basketball now.","is playing","plays","play"),
+  qC("Bạn nói muốn trở thành cầu thủ. Em hỏi bạn thích môn học nào nhất:","What's your favourite subject?","When's sports day?","What are you doing?"),
+  qL("I like Music because I want to be a singer. On sports day, I'm skipping.","Bạn ấy muốn trở thành:","a singer","a footballer","an artist"),
+  qO("My favourite subject","is","PE.")
+];})(),
+r610:(()=>{ const r1=qR("Hello, I'm Minh. My school is in the city. It's old but it's big. There is a big playground. I have English on Mondays and Thursdays. English is my favourite subject because I want to be an English teacher.");
+              const r2=qR("Last summer, Mai was in the mountains with her family. She took a lot of photos. Our sports day is in May. Today Mai is playing table tennis and her brother is running."); return [
+  r1("What is Minh's school like?","Old but big.","New and big.","Small and old."),
+  r1("When does Minh have English?","On Mondays and Thursdays.","On Mondays and Tuesdays.","Every day."),
+  r1("Why does Minh like English?","He wants to be an English teacher.","He wants to be a writer.","It's easy."),
+  r2("Where was Mai last summer?","In the mountains.","At the beach.","In the countryside."),
+  r2("What did Mai do there?","She took a lot of photos.","She swam in the sea.","She visited her grandparents."),
+  r2("What is Mai's brother doing?","He's running.","He's playing table tennis.","He's swimming."),
+  qS("Last summer I ___ at the beach. Now I ___ Maths at school.","was / am studying","am / was studying","were / study"),
+  qS("A: Is there a library in your school?<br>B: ___","Yes, there is.","Yes, it was.","Yes, I am."),
+  qC("Bạn vừa đi nghỉ hè về. Em hỏi bạn đã ở đâu:","Where were you last summer?","Where's your school?","When's sports day?"),
+  qC("Bạn hỏi: <i>“Why do you like Science?”</i> Em trả lời:","Because I want to be a doctor.","I have it on Fridays.","It's in the city."),
+  qL("I have PE on Wednesdays. On sports day, we're playing volleyball.","Bạn ấy học Thể dục vào thứ mấy?","Wednesday","Monday","Friday"),
+  qL("Last summer I was in the countryside. I visited my grandparents.","Bạn ấy đã ở đâu?","countryside","mountains","city"),
+  qO("Where","were you","last summer?"),
+  qO("Why","do you","like","Music?")
+];})()
+};
+/* menu theo đúng nhịp học: k = mã, units = các unit gộp, mix = câu tổng hợp riêng */
+const MENU = [
+  {k:'1',t:'Unit 1',units:[1]},{k:'2',t:'Unit 2',units:[2]},{k:'r12',t:'🔁 Ôn 1–2',units:[1,2],mix:'r12',rv:1},
+  {k:'3',t:'Unit 3',units:[3]},{k:'4',t:'Unit 4',units:[4]},{k:'r34',t:'🔁 Ôn 3–4',units:[3,4],mix:'r34',rv:1},
+  {k:'5',t:'Unit 5',units:[5]},{k:'r15',t:'⭐ Ôn tập 1 · U1–5',units:[1,2,3,4,5],mix:'r15',rv:2},
+  {k:'6',t:'Unit 6',units:[6]},{k:'7',t:'Unit 7',units:[7]},{k:'r67',t:'🔁 Ôn 6–7',units:[6,7],mix:'r67',rv:1},
+  {k:'8',t:'Unit 8',units:[8]},{k:'9',t:'Unit 9',units:[9]},{k:'r89',t:'🔁 Ôn 8–9',units:[8,9],mix:'r89',rv:1},
+  {k:'10',t:'Unit 10',units:[10]},{k:'r610',t:'⭐ Ôn tập 2 · U6–10',units:[6,7,8,9,10],mix:'r610',rv:2},
+  {k:'all',t:'🏆 Cả sách U1–10',units:[1,2,3,4,5,6,7,8,9,10],mix:['r15','r610'],rv:2}
+];
+
+
+/* mục đang chọn trong MENU: từng unit, game ôn 2 bài, ôn tập 5 bài, cả sách */
+let curUnit = '1';
+const menuOf = k => MENU.find(m => m.k === String(k)) || MENU[0];
+const unitLabel = k => { const m = menuOf(k);
+  return m.units.length === 1 ? 'Unit ' + m.units[0] + ' · ' + UNITS[m.units[0]-1].t
+       : (m.rv === 2 ? 'Ôn tập tổng hợp Unit ' : 'Ôn tập Unit ') + m.units[0] + '–' + m.units[m.units.length-1]; };
+function poolFor(k){
+  const m = menuOf(k), out = [];
+  m.units.forEach(n => UNITS[n-1].items.forEach(q => out.push({...q, unit:n})));
+  [].concat(m.mix || []).forEach(key => MIX[key].forEach(q => out.push({...q, unit:'Tổng hợp', mix:true})));
   return out;
 }
-const ALLQ = poolFor(0);
+const ALLQ = poolFor('all');
 
 /* ---------- Ô BẤT NGỜ ---------- */
 const SUR = {
@@ -772,7 +870,10 @@ const esc = s => String(s).replace(/[&<>"]/g, c => ({'&':'&amp;','<':'&lt;','>':
 function newGame(nTeams, nTiles, timer, names){
   /* mỗi kỹ năng rải đều trên bảng: xáo từng nhóm kỹ năng rồi xen kẽ */
   const groups = {};
-  shuffle(poolFor(curUnit)).forEach(q => (groups[q.sk] = groups[q.sk] || []).push(q));
+  /* câu TỔNG HỢP của game ôn được rút ra trước (pop lấy từ cuối mảng) */
+  const all = poolFor(curUnit);
+  [...shuffle(all.filter(q=>!q.mix)), ...shuffle(all.filter(q=>q.mix))]
+    .forEach(q => (groups[q.sk] = groups[q.sk] || []).push(q));
   const keys = shuffle(Object.keys(groups)), pool = [];
   while(keys.some(k => groups[k].length)) keys.forEach(k => { if(groups[k].length) pool.push(groups[k].pop()); });
   /* ~42% số ô có bất ngờ; bảng to hơn 10 ô thì lặp lại gói cho đủ */
@@ -852,7 +953,7 @@ function openTile(i){
   $('qtile').textContent = 'Ô ' + t.n;
   $('qtile').style.setProperty('--tc', me.c);
   $('qteam').textContent = me.name;
-  $('qlv').textContent = t.q.lv + ' · ' + t.q.sk + (curUnit ? '' : ' · U' + t.q.unit);
+  $('qlv').textContent = t.q.lv + ' · ' + t.q.sk + (menuOf(curUnit).units.length > 1 ? (t.q.mix ? ' · Tổng hợp' : ' · U' + t.q.unit) : '');
   if(t.q.t === 'order') renderOrder(t.q); else renderMC(t.q);
   $('ask').classList.add('on');
   startTimer(t.q.lv === 'Rất khó' ? 45 : 30);
@@ -1089,12 +1190,12 @@ $('tPlus') .addEventListener('click',()=>{ if(nTeams < MAX_TEAMS){ nTeams++; dra
 chips($('nb'), [{v:12,t:'12 ô'},{v:16,t:'16 ô'},{v:20,t:'20 ô'},{v:24,t:'24 ô'},{v:30,t:'30 ô'},{v:36,t:'36 ô'}],
       ()=>nTiles, v=>nTiles=+v, ()=>{ suggestTiles(); unitHint(); });
 function unitHint(){
-  const n = poolFor(curUnit).length;
-  $('unitHint').textContent = unitLabel(curUnit) + ' — ' + n + ' câu: Từ vựng · Câu · Nghe hiểu · Giao tiếp · Đọc hiểu · Sắp xếp câu.'
+  const m = menuOf(curUnit), n = poolFor(curUnit).length;
+  $('unitHint').textContent = unitLabel(curUnit) + ' — ' + n + ' câu' + (m.mix ? ' (gồm ' + [].concat(m.mix).reduce((a,k)=>a+MIX[k].length,0) + ' câu tổng hợp trộn các unit)' : '') + ': Từ vựng · Câu · Nghe hiểu · Giao tiếp · Đọc hiểu · Sắp xếp câu.'
     + (n < nTiles ? ' (Bảng ' + nTiles + ' ô sẽ lặp lại ' + (nTiles - n) + ' câu — nên chọn ≤ ' + n + ' ô.)' : '');
 }
-chips($('un'), [...UNITS.map(u=>({v:u.n, t:'Unit ' + u.n})), {v:0, t:'⭐ Tất cả'}],
-      ()=>curUnit, v=>curUnit=+v, unitHint);
+chips($('un'), MENU.map(m=>({v:m.k, t:m.t})), ()=>curUnit, v=>curUnit=String(v), unitHint);
+$('un').querySelectorAll('.chip').forEach(c=>{ const m = menuOf(c.dataset.v); if(m.rv) c.classList.add('rv'+m.rv); });
 chips($('tm'), [{v:'1',t:'Bật'},{v:'0',t:'Tắt'}], ()=>timer?'1':'0', v=>timer=(v==='1'));
 drawTeams();
 unitHint();
